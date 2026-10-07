@@ -21,6 +21,12 @@ if (process.contextIsolated || true) {
                 ipcRenderer.on('startBreak', (_event, value) => callback(value)),
             onResumeAfterBreak: (callback) =>
                 ipcRenderer.on('resumeAfterBreak', (_event, value) => callback(value)),
+            onStartTimerWithSelection: (callback) =>
+                ipcRenderer.on('startTimerWithSelection', (_event, selection) =>
+                    callback(selection)
+                ),
+            onUpdateRunningTimer: (callback) =>
+                ipcRenderer.on('updateRunningTimer', (_event, selection) => callback(selection)),
             onOpenDeeplink: (callback) =>
                 ipcRenderer.on('openDeeplink', (_event, value) => callback(value)),
             showMiniWindow: () => ipcRenderer.send('showMiniWindow'),

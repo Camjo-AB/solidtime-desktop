@@ -10,6 +10,7 @@ import {
 import { currentMembershipId, useMyMemberships } from './myMemberships.ts'
 import { dayjs } from './dayjs.ts'
 import type { Dayjs } from 'dayjs'
+import type { TimerSelection } from '../../../preload/interface'
 
 /**
  * Time entries are loaded newest-first. Ignore scheduled entries so resuming after a break
@@ -178,6 +179,31 @@ export function useTimer() {
     }
 
     /**
+     * Start a new timer with the project, task, tags and billable picked in the mini window.
+     */
+    function startTimerWithSelection(selection: TimerSelection) {
+        const startTime = dayjs().utc().format()
+        currentTimeEntry.value = {
+            ...emptyTimeEntry,
+            organization_id:
+                lastTimeEntry.value?.organization_id || currentOrganizationId.value || '',
+            project_id: selection.project_id,
+            task_id: selection.task_id,
+            description: selection.description ?? '',
+            tags: [...selection.tags],
+            billable: selection.billable,
+            id: self.crypto.randomUUID(),
+            start: startTime,
+        }
+
+        const timeEntryToCreate: CreateTimeEntryBody = {
+            ...currentTimeEntry.value,
+            member_id: currentMembershipId.value!,
+        }
+        timeEntryCreate.mutate(timeEntryToCreate)
+    }
+
+    /**
      * Stop the running work timer (if any) and start a break entry.
      * Uses one timestamp for both the work end and the break start, so the entries touch exactly.
      */
@@ -250,6 +276,7 @@ export function useTimer() {
         startBreak,
         resumeWorkAfterBreak,
         continueLastTimer,
+        startTimerWithSelection,
         timeEntryStop,
         timeEntryCreate,
     }

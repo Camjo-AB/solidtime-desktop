@@ -16,6 +16,11 @@ if (process.contextIsolated) {
             stopTimer: () => ipcRenderer.send('stopTimer'),
             startBreak: () => ipcRenderer.send('startBreak'),
             resumeAfterBreak: () => ipcRenderer.send('resumeAfterBreak'),
+            startTimerWithSelection: (selection) =>
+                ipcRenderer.send('startTimerWithSelection', selection),
+            updateRunningTimer: (selection) => ipcRenderer.send('updateRunningTimer', selection),
+            setMiniWindowExpanded: (expanded) =>
+                ipcRenderer.send('setMiniWindowExpanded', expanded),
             showMainWindow: () => ipcRenderer.send('showMainWindow'),
             getSettings: () => ipcRenderer.invoke('getSettings'),
         })

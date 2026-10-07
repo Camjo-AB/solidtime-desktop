@@ -30,6 +30,15 @@ export interface XWinExtensionActionResult {
     error?: string
 }
 
+/** Project, task, tags and billable picked in the mini window for the next or running entry. */
+export interface TimerSelection {
+    project_id: string | null
+    task_id: string | null
+    tags: string[]
+    billable: boolean
+    description: string | null
+}
+
 export interface IElectronAPI {
     loadPreferences: () => Promise<void>
     showMainWindow: () => void
@@ -50,6 +59,11 @@ export interface IElectronAPI {
     onStopTimer: (callback: () => void) => void
     onStartBreak: (callback: () => void) => void
     onResumeAfterBreak: (callback: () => void) => void
+    startTimerWithSelection: (selection: TimerSelection) => void
+    updateRunningTimer: (selection: TimerSelection) => void
+    setMiniWindowExpanded: (expanded: boolean) => void
+    onStartTimerWithSelection: (callback: (selection: TimerSelection) => void) => void
+    onUpdateRunningTimer: (callback: (selection: TimerSelection) => void) => void
     updateTrayState: (timeEntry: string, showTimer: boolean) => void
     updateAutoUpdater: () => void
     updateIdleThreshold: (thresholdMinutes: number) => void

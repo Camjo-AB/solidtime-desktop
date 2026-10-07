@@ -139,6 +139,13 @@ export function registerMainWindowListeners(mainWindow: BrowserWindow) {
     ipcMain.on('resumeAfterBreak', () => {
         mainWindow.webContents.send('resumeAfterBreak')
     })
+    // Project/task/tags picked in the mini window
+    ipcMain.on('startTimerWithSelection', (_event, selection) => {
+        mainWindow.webContents.send('startTimerWithSelection', selection)
+    })
+    ipcMain.on('updateRunningTimer', (_event, selection) => {
+        mainWindow.webContents.send('updateRunningTimer', selection)
+    })
     ipcMain.on('showMainWindow', () => {
         if (mainWindow && !isE2ETesting()) {
             mainWindow.show()

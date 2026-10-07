@@ -31,7 +31,7 @@ import { initializeSettings } from './utils/settings.ts'
 import { useLiveTimer } from './utils/liveTimer'
 import { dayjs } from './utils/dayjs'
 import { useStorage } from '@vueuse/core'
-import { emptyTimeEntry } from './utils/timeEntries'
+import { emptyTimeEntry, useCurrentTimeEntryUpdateMutation } from './utils/timeEntries'
 import { useOrganization } from './utils/organization.ts'
 
 const router = useRouter()
@@ -43,8 +43,16 @@ provide('organization', organization)
 const queryClient = useQueryClient()
 
 // Use the timer composable for shared timer logic
-const { stopTimer, continueLastTimer, isActive, lastTimeEntry, startBreak, resumeWorkAfterBreak } =
-    useTimer()
+const {
+    stopTimer,
+    continueLastTimer,
+    startTimerWithSelection,
+    isActive,
+    lastTimeEntry,
+    startBreak,
+    resumeWorkAfterBreak,
+} = useTimer()
+const currentTimeEntryUpdateMutation = useCurrentTimeEntryUpdateMutation()
 
 // Live timer for bottom row display
 const { liveTimer, startLiveTimer, stopLiveTimer } = useLiveTimer()
@@ -123,6 +131,25 @@ onMounted(async () => {
     })
     await listenForBackendEvent('startBreak', () => {
         startBreak()
+    })
+    // Project/task/tags picked in the mini window
+    window.electronAPI.onStartTimerWithSelection((selection) => {
+        if (!isActive.value) {
+            startTimerWithSelection(selection)
+        }
+    })
+    window.electronAPI.onUpdateRunningTimer((selection) => {
+        if (!isActive.value || currentTimeEntry.value.type === 'break') {
+            return
+        }
+        currentTimeEntry.value = {
+            ...currentTimeEntry.value,
+            project_id: selection.project_id,
+            task_id: selection.task_id,
+            tags: [...selection.tags],
+            billable: selection.billable,
+        }
+        currentTimeEntryUpdateMutation.mutate(currentTimeEntry.value)
     })
     await listenForBackendEvent('resumeAfterBreak', () => {
         // Guard: a stale stored break entry must never be resumed as work

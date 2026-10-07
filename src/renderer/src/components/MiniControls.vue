@@ -1,15 +1,24 @@
 <script setup lang="ts">
 import { ChevronRightIcon } from '@heroicons/vue/16/solid'
 import { Coffee, Play } from '@lucide/vue'
-import { ProjectBadge, time, TimeTrackerStartStop } from '@solidtime/ui'
+import {
+    time,
+    TimeTrackerProjectTaskDropdown,
+    TimeTrackerStartStop,
+    TimeTrackerTagDropdown,
+} from '@solidtime/ui'
+import type { Tag, TimeEntry } from '@solidtime/api'
 import { useLiveTimer } from '../utils/liveTimer'
 import { useMyMemberships } from '../utils/myMemberships'
-import { computed, watchEffect } from 'vue'
+import { computed, ref, watch, watchEffect } from 'vue'
 import { useStorage } from '@vueuse/core'
 import { emptyTimeEntry } from '../utils/timeEntries'
 import { useQuery } from '@tanstack/vue-query'
 import { getAllProjects } from '../utils/projects'
 import { getAllTasks } from '../utils/tasks'
+import { getAllTags, useTagCreateMutation } from '../utils/tags'
+import { getAllClients } from '../utils/clients'
+import type { TimerSelection } from '../../../preload/interface'
 import { sendEventToWindow } from '../utils/events'
 import { showMainWindow } from '../utils/window'
 import { dayjs } from '../utils/dayjs'
@@ -79,31 +88,94 @@ const projects = computed(() => {
     return projectsResponse.value?.data
 })
 
-const shownDescription = computed(() => {
-    if (isRunning.value) {
-        return currentTimeEntry.value.description !== ''
-            ? currentTimeEntry.value.description
-            : currentTask.value?.name
-    } else if (!isRunning.value) {
-        return lastTimeEntry.value.description !== ''
-            ? lastTimeEntry.value.description
-            : currentTask.value?.name
+const { data: tagsResponse } = useQuery({
+    queryKey: ['tags', organizationIdToLoad],
+    queryFn: () => getAllTags(organizationIdToLoad.value),
+    enabled: currentOrganizationLoaded,
+})
+const tags = computed(() => tagsResponse.value?.data ?? [])
+
+const { data: clientsResponse } = useQuery({
+    queryKey: ['clients', organizationIdToLoad],
+    queryFn: () => getAllClients(organizationIdToLoad.value),
+    enabled: currentOrganizationLoaded,
+})
+const clients = computed(() => clientsResponse.value?.data ?? [])
+
+const tagCreate = useTagCreateMutation()
+async function createTag(name: string): Promise<Tag | undefined> {
+    const response = await tagCreate.mutateAsync({ name })
+    return response?.data
+}
+
+// Projects cannot be created from the mini window; the picker hides that option.
+async function createNothing() {
+    return undefined
+}
+
+/*
+ * Project, task, tags and billable for the entry: the running one, or the next one when stopped
+ * (starts as a copy of the last entry, like "continue"). Picking something while stopped only
+ * changes what play starts; while running it updates the running entry via the main window.
+ */
+function selectionFrom(entry: TimeEntry): TimerSelection {
+    return {
+        project_id: entry.project_id ?? null,
+        task_id: entry.task_id ?? null,
+        tags: [...(entry.tags ?? [])],
+        billable: entry.billable ?? false,
+        description: entry.description ?? null,
     }
-    return null
+}
+
+const selection = ref<TimerSelection>(
+    selectionFrom(isRunning.value ? currentTimeEntry.value : lastTimeEntry.value)
+)
+
+const projectPickerOpen = ref(false)
+const tagPickerOpen = ref(false)
+const pickerOpen = computed(() => projectPickerOpen.value || tagPickerOpen.value)
+
+watch(
+    () => (isRunning.value ? currentTimeEntry.value : lastTimeEntry.value),
+    (entry) => {
+        // Keep what is being picked right now
+        if (!pickerOpen.value) {
+            selection.value = selectionFrom(entry)
+        }
+    },
+    { deep: true }
+)
+
+watch(pickerOpen, (open) => {
+    window.electronAPI.setMiniWindowExpanded(open)
+})
+
+// IPC cannot clone Vue proxies
+function plainSelection(): TimerSelection {
+    return JSON.parse(JSON.stringify(selection.value))
+}
+
+function onSelectionChanged() {
+    if (isRunning.value && !isOnBreak.value) {
+        window.electronAPI.updateRunningTimer(plainSelection())
+    }
+}
+
+function onProjectChanged() {
+    // Adopt the billable default of the picked project, like the main window does
+    const project = projects.value?.find((p) => p.id === selection.value.project_id)
+    if (project) {
+        selection.value.billable = project.is_billable
+    }
+    onSelectionChanged()
+}
+
+const shownDescription = computed(() => {
+    return selection.value.description ? selection.value.description : currentTask.value?.name
 })
 const currentTask = computed(() => {
-    if (isRunning.value) {
-        return tasks.value?.find((task) => task.id === currentTimeEntry.value.task_id)
-    } else {
-        return tasks.value?.find((task) => task.id === lastTimeEntry.value.task_id)
-    }
-})
-const shownProject = computed(() => {
-    if (isRunning.value) {
-        return projects.value?.find((project) => project.id === currentTimeEntry.value.project_id)
-    } else {
-        return projects.value?.find((project) => project.id === lastTimeEntry.value.project_id)
-    }
+    return tasks.value?.find((task) => task.id === selection.value.task_id)
 })
 
 watchEffect(() => {
@@ -120,7 +192,7 @@ function focusMainWindow() {
 
 function onToggleButtonPress(newState: boolean) {
     if (newState) {
-        sendEventToWindow('main', 'startTimer')
+        window.electronAPI.startTimerWithSelection(plainSelection())
     } else {
         showMainWindow()
         sendEventToWindow('main', 'stopTimer')
@@ -139,7 +211,7 @@ const currentTimer = computed(() => {
 
 <template>
     <div
-        class="h-screen relative w-screen border-border-secondary border bg-primary rounded-[16px] text-white py-1 flex items-center cursor-default justify-between select-none">
+        class="h-8 relative w-screen border-border-secondary border bg-primary rounded-[16px] text-white py-1 flex items-center cursor-default justify-between select-none">
         <div
             class="text-sm text-text-tertiary flex items-center relative min-w-0"
             :class="isOnBreak ? 'shrink-0' : 'flex-1'">
@@ -158,9 +230,7 @@ const currentTimer = computed(() => {
                         data-tauri-drag-region />
                 </svg>
             </div>
-            <div
-                class="cursor-pointer rounded-lg flex items-center shrink min-w-0"
-                @click="focusMainWindow">
+            <div class="rounded-lg flex items-center shrink min-w-0">
                 <div
                     v-if="isOnBreak"
                     class="flex items-center shrink-0 space-x-1.5 text-xs font-medium whitespace-nowrap text-amber-600 dark:text-amber-400">
@@ -168,12 +238,35 @@ const currentTimer = computed(() => {
                     <span>On break</span>
                 </div>
                 <div v-else class="flex items-center flex-1 space-x-0.5 min-w-0">
-                    <ProjectBadge
-                        class="px-0 whitespace-nowrap overflow-ellipsis"
-                        :border="false"
-                        :color="shownProject?.color"
-                        :name="shownProject?.name ?? 'No Project'"></ProjectBadge>
-                    <div class="flex text-xs flex-1 truncate items-center space-x-0.5 shrink">
+                    <TimeTrackerProjectTaskDropdown
+                        v-model:project="selection.project_id"
+                        v-model:task="selection.task_id"
+                        v-model:open="projectPickerOpen"
+                        variant="ghost"
+                        size="xs"
+                        align="start"
+                        class="min-w-0 max-w-[140px] text-xs"
+                        :projects="projects ?? []"
+                        :tasks="tasks ?? []"
+                        :clients="clients"
+                        :createProject="createNothing"
+                        :createClient="createNothing"
+                        :canCreateProject="false"
+                        currency=""
+                        :organizationBillableRate="null"
+                        :enableEstimatedTime="false"
+                        @changed="onProjectChanged"></TimeTrackerProjectTaskDropdown>
+                    <TimeTrackerTagDropdown
+                        v-model="selection.tags"
+                        v-model:open="tagPickerOpen"
+                        showLabel
+                        triggerClass="h-6 px-1.5 text-xs max-w-[110px]"
+                        :tags="tags"
+                        :createTag="createTag"
+                        @changed="onSelectionChanged"></TimeTrackerTagDropdown>
+                    <div
+                        class="flex text-xs flex-1 truncate items-center space-x-0.5 shrink cursor-pointer"
+                        @click="focusMainWindow">
                         <ChevronRightIcon
                             class="w-4 shrink-0 text-text-tertiary"></ChevronRightIcon>
                         <span
