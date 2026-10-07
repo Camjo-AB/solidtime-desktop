@@ -42,6 +42,7 @@ jobs:
             - name: Build and pack @solidtime/ui
               run: |
                   npm run build
+                  mkdir -p "${{ runner.temp }}/ui"
                   npm pack --pack-destination "${{ runner.temp }}/ui"
               working-directory: ./resources/js/packages/ui
 
