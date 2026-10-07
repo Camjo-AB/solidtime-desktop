@@ -7,8 +7,8 @@ import { emptyTimeEntry } from './timeEntries'
 
 const challenge = ref('')
 const state = ref('')
-export const defaultEndpoint = 'https://app.solidtime.io'
-export const defaultClientId = '9c994748-c593-4a6d-951b-6849c829bc4e'
+export const defaultEndpoint = 'https://time.camjo.com'
+export const defaultClientId = '01a0d34c-6f25-7283-9d05-7cf41f5368b5'
 
 export const endpoint = useStorage('instance_endpoint', defaultEndpoint)
 export const clientId = useStorage('instance_client_id', defaultClientId)

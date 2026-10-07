@@ -1,5 +1,5 @@
-appId: io.solidtime.desktop
-productName: solidtime
+appId: se.camjo.time
+productName: Camjo Time
 directories:
     buildResources: build
 files:
@@ -28,12 +28,14 @@ win:
     publish:
         - provider: github
           channel: latest-${arch}
+          owner: Camjo-AB
+          repo: solidtime-desktop
     executableName: solidtime
     target:
         - nsis
 nsis:
     include: build/installer.nsh
-    artifactName: ${name}-setup-${arch}.${ext}
+    artifactName: camjo-time-setup-${arch}.${ext}
     shortcutName: ${productName}
     uninstallDisplayName: ${productName}
     createDesktopShortcut: always
@@ -41,6 +43,9 @@ mac:
     publish:
         - provider: github
           channel: latest-${arch}
+          owner: Camjo-AB
+          repo: solidtime-desktop
+    artifactName: camjo-time-${version}-${arch}-mac.${ext}
     entitlementsInherit: build/entitlements.mac.plist
     target: default
     extendInfo:
@@ -51,7 +56,7 @@ mac:
         - NSScreenCaptureUsageDescription: Application requests access to screen recording to track window activity for time tracking purposes.
     notarize: true
 dmg:
-    artifactName: ${name}-${arch}.${ext}
+    artifactName: camjo-time-${arch}.${ext}
 linux:
     artifactName: ${name}-${arch}.${ext}
     icon: build/icon.icns
