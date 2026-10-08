@@ -23,6 +23,7 @@ import type {
 } from '@solidtime/api'
 import type { ActivityPeriod } from '@solidtime/ui'
 import { useAppIcons } from '../utils/appIcons.ts'
+import { googleCalendarConnectUrl, useGoogleCalendarEvents } from '../utils/googleCalendar.ts'
 
 const { currentOrganizationId, currentMembership } = useMyMemberships()
 const currentOrganizationLoaded = computed(() => !!currentOrganizationId.value)
@@ -34,6 +35,14 @@ const initialDate = computed(() => (route.query.date as string | undefined) ?? n
 
 const calendarStart = ref<Dayjs | undefined>(undefined)
 const calendarEnd = ref<Dayjs | undefined>(undefined)
+
+// Meetings of the connected Google Calendar, shown read-only next to time entries
+const googleCalendar = useGoogleCalendarEvents(calendarStart, calendarEnd)
+const showGoogleCalendarHint = computed(
+    () =>
+        googleCalendar.enabled.value &&
+        (!googleCalendar.connected.value || googleCalendar.needsReconnect.value)
+)
 
 const enableCalendarQuery = computed(() => {
     return !!currentOrganizationId.value && !!calendarStart.value && !!calendarEnd.value
@@ -330,6 +339,24 @@ const activityPeriodsWithIcons = computed<ActivityPeriod[]>(() => {
             <LoadingSpinner />
         </div>
         <template v-else>
+            <div
+                v-if="showGoogleCalendarHint"
+                class="shrink-0 flex items-center gap-2 px-4 py-1.5 text-sm border-b border-border-secondary text-text-secondary">
+                <span v-if="googleCalendar.needsReconnect.value">
+                    Your Google Calendar could not be loaded.
+                </span>
+                <span v-else>See your meetings here and register them with one click.</span>
+                <a
+                    :href="googleCalendarConnectUrl"
+                    target="_blank"
+                    class="font-medium text-text-primary underline underline-offset-2">
+                    {{
+                        googleCalendar.needsReconnect.value
+                            ? 'Reconnect in your profile'
+                            : 'Connect in your profile'
+                    }}
+                </a>
+            </div>
             <TimeEntryCalendar
                 :key="initialDate ?? 'calendar'"
                 class="flex-1"
@@ -340,6 +367,7 @@ const activityPeriodsWithIcons = computed<ActivityPeriod[]>(() => {
                 :clients="clients"
                 :tags="tags"
                 :activityPeriods="activityPeriodsWithIcons"
+                :externalEvents="googleCalendar.events.value"
                 :loading="timeEntriesLoading"
                 :enableEstimatedTime="false"
                 :currency="currentMembership?.organization?.currency || 'USD'"
