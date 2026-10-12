@@ -105,9 +105,19 @@ jobs:
 
             - name: Run Electron Builder (macOS)
               if: matrix.platform == 'mac'
-              run: npx electron-builder --mac --${{ matrix.arch }} --publish never -c.mac.notarize=false
+              # No Developer ID yet: sign ad-hoc and without hardened runtime. Unsigned or
+              # hardened ad-hoc builds die at launch on Apple silicon ("different Team IDs").
+              # Drop identity/hardenedRuntime here once a real certificate exists.
+              run: npx electron-builder --mac --${{ matrix.arch }} --publish never -c.mac.notarize=false -c.mac.identity=- -c.mac.hardenedRuntime=false
               env:
                   CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+
+            - name: Verify macOS signature
+              if: matrix.platform == 'mac'
+              run: |
+                  for app in dist/mac*/*.app; do
+                      codesign --verify --deep --strict --verbose=2 "$app"
+                  done
 
             - name: Upload installers
               uses: actions/upload-artifact@v4
