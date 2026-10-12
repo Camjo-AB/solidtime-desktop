@@ -35,3 +35,11 @@ export function useBreaksEnabled(organizationId?: MaybeRefOrGetter<string | null
     const { organization } = useOrganization(organizationId)
     return computed(() => organization.value?.breaks_enabled ?? false)
 }
+
+export function useRequireTagWithProject(
+    organizationId?: MaybeRefOrGetter<string | null | undefined>
+) {
+    const { organization } = useOrganization(organizationId)
+    // Servers without this setting omit the field
+    return computed(() => organization.value?.require_tag_with_project === true)
+}

@@ -9,6 +9,7 @@ import {
     TimeEntryMassActionRow,
     TimeEntryCreateModal,
     TimeTrackerMoreOptionsDropdown,
+    TAG_REQUIRED_WITH_PROJECT_MESSAGE,
 } from '@solidtime/ui'
 import {
     emptyTimeEntry,
@@ -46,7 +47,7 @@ import { apiClient } from '../utils/api'
 import { updateTrayState } from '../utils/tray'
 import { isTrayTimerActivated } from '../utils/settings'
 import { groupSimilarTimeEntriesSetting } from '../utils/timeEntryGrouping.ts'
-import { useTimer, getLastWorkTimeEntry } from '../utils/useTimer.ts'
+import { useTimer, getLastWorkTimeEntry, tagRequiredAction } from '../utils/useTimer.ts'
 import { useBreaksEnabled } from '../utils/organization.ts'
 import { useRouter } from 'vue-router'
 import { useStorage } from '@vueuse/core'
@@ -69,8 +70,24 @@ const {
     startTimer,
     startBreak,
     resumeWorkAfterBreak,
+    blockedByMissingTag,
     timeEntryCreate,
 } = useTimer()
+
+function stopTimerUnlessTagMissing() {
+    if (!blockedByMissingTag('stop')) {
+        stopTimer()
+    }
+}
+
+// The notice goes away once a tag is added, the project removed or the timer stopped elsewhere
+watch(
+    () => [currentTimeEntry.value.project_id, currentTimeEntry.value.tags, isActive.value],
+    () => {
+        tagRequiredAction.value = null
+    },
+    { deep: true }
+)
 
 const breaksEnabled = useBreaksEnabled()
 
@@ -228,6 +245,9 @@ async function createManualTimeEntry(timeEntry: Omit<CreateTimeEntryBody, 'membe
 
 // Emitted by the range selector when a finished start-end range is entered with no timer running
 async function createTimeEntryFromCurrentEntry() {
+    if (blockedByMissingTag('save')) {
+        return
+    }
     const { start, end, description, project_id, task_id, billable, tags } = currentTimeEntry.value
     await createManualTimeEntry({ start, end, description, project_id, task_id, billable, tags })
     currentTimeEntry.value = { ...emptyTimeEntry }
@@ -413,11 +433,22 @@ watch(isLoadMoreVisible, async (isVisible) => {
                             @start-live-timer="startLiveTimer"
                             @stop-live-timer="stopLiveTimer"
                             @start-timer="startTimer"
-                            @stop-timer="stopTimer"
+                            @stop-timer="stopTimerUnlessTagMissing"
                             @start-break="startBreak"
                             @resume-after-break="resumePreviousWorkAfterBreak"
                             @create-time-entry="createTimeEntryFromCurrentEntry"
                             @update-time-entry="updateCurrentTimeEntry"></TimeTrackerControls>
+                        <p
+                            v-if="tagRequiredAction"
+                            role="alert"
+                            class="pt-2 text-sm text-destructive">
+                            {{ TAG_REQUIRED_WITH_PROJECT_MESSAGE }}
+                            {{
+                                tagRequiredAction === 'stop'
+                                    ? 'Add a tag to stop the timer.'
+                                    : 'Add a tag to save the time entry.'
+                            }}
+                        </p>
                     </div>
                 </div>
                 <div class="flex justify-center items-center pt-9 group pr-4">

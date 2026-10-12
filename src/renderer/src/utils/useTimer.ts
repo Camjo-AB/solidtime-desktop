@@ -1,7 +1,8 @@
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { useStorage } from '@vueuse/core'
 import { useQueryClient } from '@tanstack/vue-query'
 import type { TimeEntry, CreateTimeEntryBody } from '@solidtime/api'
+import { isMissingRequiredTag } from '@solidtime/ui'
 import {
     emptyTimeEntry,
     useTimeEntryStopMutation,
@@ -11,6 +12,15 @@ import { currentMembershipId, useMyMemberships } from './myMemberships.ts'
 import { dayjs } from './dayjs.ts'
 import type { Dayjs } from 'dayjs'
 import type { TimerSelection } from '../../../preload/interface'
+import { useRequireTagWithProject } from './organization.ts'
+import { showMainWindow } from './window.ts'
+
+/**
+ * Set when stopping the timer (or saving a range) was blocked because the entry has a
+ * project but no tag while the organization requires one. The main window shows it until
+ * a tag is added.
+ */
+export const tagRequiredAction = ref<'stop' | 'save' | null>(null)
 
 /**
  * Time entries are loaded newest-first. Ignore scheduled entries so resuming after a break
@@ -55,6 +65,24 @@ export function useTimer() {
 
     const { memberships, currentOrganizationId } = useMyMemberships()
 
+    // The running entry may belong to another organization than the one shown
+    const requireTagWithProject = useRequireTagWithProject(
+        () => currentTimeEntry.value.organization_id || currentOrganizationId.value
+    )
+
+    /**
+     * Whether the entry has a project but no tag while the organization requires one.
+     * Shows the main window with the reason, so stops from the tray or the mini window explain themselves.
+     */
+    function blockedByMissingTag(action: 'stop' | 'save'): boolean {
+        if (!isMissingRequiredTag(currentTimeEntry.value, requireTagWithProject.value)) {
+            return false
+        }
+        tagRequiredAction.value = action
+        showMainWindow()
+        return true
+    }
+
     /**
      * Check if there's an active timer running
      */
@@ -81,6 +109,9 @@ export function useTimer() {
      * @param endTime - Optional end time (ISO string). If not provided, uses current time
      */
     async function stopTimer(endTime?: string) {
+        if (blockedByMissingTag('stop')) {
+            throw new Error('A tag is required to stop the timer.')
+        }
         const stoppedTimeEntry = { ...currentTimeEntry.value }
         if (stoppedTimeEntry.id === '') {
             // The entry may still be creating — pick up its optimistic id from
@@ -211,6 +242,10 @@ export function useTimer() {
         if (isOnBreak.value) {
             return
         }
+        // Checked before anything changes: the stop below is fire and forget
+        if (isActive.value && blockedByMissingTag('stop')) {
+            return
+        }
         const switchTime = dayjs().utc().format()
         if (isActive.value) {
             // Fire and forget: the mutation scope serializes the stop before
@@ -277,6 +312,7 @@ export function useTimer() {
         resumeWorkAfterBreak,
         continueLastTimer,
         startTimerWithSelection,
+        blockedByMissingTag,
         timeEntryStop,
         timeEntryCreate,
     }

@@ -51,6 +51,7 @@ const {
     lastTimeEntry,
     startBreak,
     resumeWorkAfterBreak,
+    blockedByMissingTag,
 } = useTimer()
 const currentTimeEntryUpdateMutation = useCurrentTimeEntryUpdateMutation()
 
@@ -127,7 +128,9 @@ onMounted(async () => {
         continueLastTimer()
     })
     await listenForBackendEvent('stopTimer', () => {
-        stopTimer()
+        if (!blockedByMissingTag('stop')) {
+            stopTimer()
+        }
     })
     await listenForBackendEvent('startBreak', () => {
         startBreak()
@@ -167,6 +170,10 @@ onMounted(async () => {
 })
 
 async function handleIdleDialogResponse(choice: number, idleStartTime: string) {
+    // A required tag that is missing blocks the stop; the main window then shows why
+    if (choice !== 0 && blockedByMissingTag('stop')) {
+        return
+    }
     switch (choice) {
         case 0: // Keep Idle Time
             // Do nothing - keep timer running as-is
